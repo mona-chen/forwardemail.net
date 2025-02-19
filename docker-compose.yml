@@ -1,39 +1,151 @@
-version: "3.7"
+version: "3.8"
+
 services:
-    forwardemail:
-        restart: always
-        image: forwardemail/forwardemail
-        ports:
-            # web
-            - "3000:3000"
-            # api
-            - "4000:4000"
-            # caldav
-            - "5000:5000"
-            # smtp
-            - "2432:2432"
-            - "2465:2465"
-            - "2587:2587"
-            # imap
-            - "2993:2993"
-            # pop3
-            - "2995:2995"
-            # mx
-            #- "25:25"
-        depends_on:
-            - redis
-            - mongo
-        environment:
-            CMD_ARGS:
-                --dbs.mongo=mongodb://mongo:27017/forwardemail
-                --dbs.redis=redis://redis:6379/
-    redis:
-        image: redis:alpine
-        restart: always
-        volumes:
-            - /data
-    mongo:
-        image: mongo
-        restart: always
-        volumes:
-            - /data/db
+  # --- ForwardEmail Processes ---
+  web:
+    build: .
+    container_name: forwardemail_web
+    # Runs the web server (default development port 3000)
+    command: ["pnpm", "start", "web"]
+    ports:
+      - "80:3000"          # Expose web server on port 80 (or adjust as needed)
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      WEB_HOST: "yourdomain.com"
+      MONGO_URI: "mongodb://mongo:27017/forwardemail"
+      REDIS_URI: "redis://redis:6379"
+      # ... any additional web-specific environment variables ...
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: forwardemail_api
+    # Runs the API server (default port 4000)
+    command: ["pnpm", "start", "api"]
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGO_URI: "mongodb://mongo:27017/forwardemail"
+      REDIS_URI: "redis://redis:6379"
+      # ... additional API env variables ...
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  smtp:
+    build: .
+    container_name: forwardemail_smtp
+    # Runs the SMTP server (default port 2432); externally mapped to standard SMTP port (25) if desired
+    command: ["pnpm", "start", "smtp"]
+    ports:
+      - "25:2432"
+    environment:
+      NODE_ENV: production
+      PORT: 2432
+      # ... SMTP-specific env variables (TLS certs, relay settings, etc.) ...
+    restart: unless-stopped
+
+  imap:
+    build: .
+    container_name: forwardemail_imap
+    # Runs the IMAP server (default port 2113); map to port 143 if needed
+    command: ["pnpm", "start", "imap"]
+    ports:
+      - "143:2113"
+    environment:
+      NODE_ENV: production
+      PORT: 2113
+      # ... IMAP-specific env variables ...
+    restart: unless-stopped
+
+  pop3:
+    build: .
+    container_name: forwardemail_pop3
+    # Runs the POP3 server (default port 2115); map to port 110 if needed
+    command: ["pnpm", "start", "pop3"]
+    ports:
+      - "110:2115"
+    environment:
+      NODE_ENV: production
+      PORT: 2115
+      # ... POP3-specific env variables ...
+    restart: unless-stopped
+
+  bree:
+    build: .
+    container_name: forwardemail_bree
+    # Runs the Bree job scheduler; no port exposure required
+    command: ["pnpm", "start", "bree"]
+    environment:
+      NODE_ENV: production
+      # ... additional Bree environment variables if needed ...
+    restart: unless-stopped
+
+  caldav:
+    build: .
+    container_name: forwardemail_caldav
+    # Runs the CalDAV server (default port 5000)
+    command: ["pnpm", "start", "caldav"]
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      # ... CalDAV-specific environment variables ...
+    restart: unless-stopped
+
+  mx:
+    build: .
+    container_name: forwardemail_mx
+    # Runs the MX (mail exchange) service (default port 2525)
+    command: ["pnpm", "start", "mx"]
+    ports:
+      - "2525:2525"
+    environment:
+      NODE_ENV: production
+      PORT: 2525
+      # ... MX-specific env variables ...
+    restart: unless-stopped
+
+  sqlite:
+    build: .
+    container_name: forwardemail_sqlite
+    # Runs the SQLite service (default port 3456) – often internal only
+    command: ["pnpm", "start", "sqlite"]
+    ports:
+      - "3456:3456"
+    environment:
+      NODE_ENV: production
+      PORT: 3456
+      # ... SQLite-specific env variables ...
+    restart: unless-stopped
+
+  # --- Dependencies ---
+  mongo:
+    image: mongo:6.0
+    container_name: forwardemail_mongo
+    environment:
+      MONGO_INITDB_DATABASE: forwardemail
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: forwardemail_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  redis_data:
